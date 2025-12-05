@@ -50,6 +50,19 @@ async function run() {
         res.send(result);
     })
 
+    
+
+    // get specific categorized book data from db
+
+    app.get('/book-category/:category' , async(req , res)=> {
+        const categoryName = req.params.category;
+        const query = {category : categoryName};
+        const result = await booksCollection.find(query).toArray();
+        res.send(result);
+    })
+
+
+
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
