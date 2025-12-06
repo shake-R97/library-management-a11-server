@@ -32,6 +32,7 @@ async function run() {
 
     const userCollection =  client.db('bookArchive').collection('user');
     const booksCollection =  client.db('bookArchive').collection('books');
+    const borrowCollection =  client.db('bookArchive').collection('borrow');
 
     // save user to db
 
@@ -50,6 +51,8 @@ async function run() {
         res.send(result);
     })
 
+    // borrow book api
+
     app.post('/borrow/:id' , async(req , res)=> {
         const id = req.params.id;
         const {userEmail , returnDate} = req.body;
@@ -65,6 +68,23 @@ async function run() {
         if(!book || book.quantity <= 0){
             return res.status(400).send({message: 'Book is not available'})
         } 
+
+        const result1 = await booksCollection.updateOne(filter , updateQuantity)
+
+
+        // saving borrowed book details
+        const borrowData = {
+            bookId : id,
+            bookName : book.name,
+            userEmail,
+            borrowedDate : new Date(),
+            returnDate,
+
+        } 
+
+        const result2 = await borrowCollection.insertOne(borrowData);
+
+        res.send(result1 , result2);
     })
 
     
