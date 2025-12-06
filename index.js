@@ -107,6 +107,15 @@ async function run() {
         res.send(result);
     })
 
+    // get borrowed book data
+
+    app.get('/borrowed/:email' , async (req , res)=> {
+        const email = req.params.email;
+        const query = {email: email};
+        const result = await borrowCollection.find(query).toArray();
+        res.send(result);
+    })
+
 
 
 
