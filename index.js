@@ -2,7 +2,7 @@ const express = require('express')
 const cors = require('cors')
 const app = express();
 const port = process.env.PORT || 3000;
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config()
 
 
@@ -50,14 +50,40 @@ async function run() {
         res.send(result);
     })
 
+    app.post('/borrow/:id' , async(req , res)=> {
+        const id = req.params.id;
+        const {userEmail , returnDate} = req.body;
+
+        const filter = {_id: new ObjectId(id)};
+
+        const updateQuantity = {
+            $inc: { quantity: -1 },
+        }
+
+        const book = await booksCollection.findOne(filter);
+
+        if(!book || book.quantity <= 0){
+            return res.status(400).send({message: 'Book is not available'})
+        } 
+    })
+
     
 
-    // get specific categorized book data from db
+    //  specific categorized book data from db
 
     app.get('/book-category/:category' , async(req , res)=> {
         const categoryName = req.params.category;
         const query = {category : categoryName};
         const result = await booksCollection.find(query).toArray();
+        res.send(result);
+    })
+
+    // specific book data from db
+
+    app.get('/book-detail/:id' , async(req , res)=> {
+        const id = req.params.id;
+        const query = {_id: new ObjectId(id)};
+        const result = await booksCollection.findOne(query);
         res.send(result);
     })
 
