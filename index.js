@@ -75,6 +75,7 @@ async function run() {
         // saving borrowed book details
         const borrowData = {
             bookId : id,
+            bookImg : book.image,
             bookName : book.name,
             userEmail,
             borrowedDate : new Date(),
@@ -111,11 +112,18 @@ async function run() {
 
     app.get('/borrowed/:email' , async (req , res)=> {
         const email = req.params.email;
-        const query = {email: email};
+        const query = {userEmail: email};
         const result = await borrowCollection.find(query).toArray();
         res.send(result);
     })
 
+    // get all books
+
+    app.get('/all-books' , async (req , res)=> {
+        const result = await booksCollection.find({}).toArray();
+        console.log(result);
+        res.send(result)
+    })
 
 
 
