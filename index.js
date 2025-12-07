@@ -1,149 +1,171 @@
-const express = require('express')
-const cors = require('cors')
-const app = express();
-const port = process.env.PORT || 3000;
+const express = require('express');
+const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-require('dotenv').config()
+require('dotenv').config();
 
-
-// middleware
-
+const app = express();
 app.use(cors());
 app.use(express.json());
 
 
 
+let client;
+let clientPromise;
 
-const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@gerund-server-1.t1uapv6.mongodb.net/?appName=Gerund-Server-1`;
+if (!global._mongoClientPromise) {
+    const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@gerund-server-1.t1uapv6.mongodb.net/?retryWrites=true&w=majority&appName=Gerund-Server-1`;
 
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
-const client = new MongoClient(uri, {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    strict: true,
-    deprecationErrors: true,
-  }
+    client = new MongoClient(uri, {
+        serverApi: {
+            version: ServerApiVersion.v1,
+            strict: true,
+            deprecationErrors: true,
+        }
+    });
+
+    global._mongoClientPromise = client.connect();
+}
+
+clientPromise = global._mongoClientPromise;
+
+
+
+app.get('/', (req, res) => {
+    res.send("📚 Library Server Running on Vercel!");
 });
 
-async function run() {
-  try {
-    // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+// Save User
+app.post('/users', async (req, res) => {
+    try {
+        const client = await clientPromise;
+        const result = await client.db('bookArchive')
+            .collection('user')
+            .insertOne(req.body);
 
-    const userCollection =  client.db('bookArchive').collection('user');
-    const booksCollection =  client.db('bookArchive').collection('books');
-    const borrowCollection =  client.db('bookArchive').collection('borrow');
-
-    // save user to db
-
-    app.post('/users', async(req , res)=>{
-        const userData = req.body;
-        console.log(userData);
-        const result = await userCollection.insertOne(userData);
         res.send(result);
-    })
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
-    // save added book to db
 
-    app.post('/addbook' , async (req , res)=> {
-        const bookData = req.body;
-        const result = await booksCollection.insertOne(bookData);
+// Add Book
+app.post('/addbook', async (req, res) => {
+    try {
+        const client = await clientPromise;
+        const result = await client.db('bookArchive')
+            .collection('books')
+            .insertOne(req.body);
+
         res.send(result);
-    })
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
-    // borrow book api
 
-    app.post('/borrow/:id' , async(req , res)=> {
+// Borrow Book
+app.post('/borrow/:id', async (req, res) => {
+    try {
+        const client = await clientPromise;
+        const db = client.db('bookArchive');
+
         const id = req.params.id;
-        const {userEmail , returnDate} = req.body;
+        const { userEmail, returnDate } = req.body;
 
-        const filter = {_id: new ObjectId(id)};
+        const filter = { _id: new ObjectId(id) };
 
-        const updateQuantity = {
-            $inc: { quantity: -1 },
+        const book = await db.collection('books').findOne(filter);
+
+        if (!book || book.quantity <= 0) {
+            return res.status(400).json({ message: "Book not available" });
         }
 
-        const book = await booksCollection.findOne(filter);
+        // decrease quantity
+        await db.collection('books').updateOne(filter, { $inc: { quantity: -1 } });
 
-        if(!book || book.quantity <= 0){
-            return res.status(400).send({message: 'Book is not available'})
-        } 
-
-        const result1 = await booksCollection.updateOne(filter , updateQuantity)
-
-
-        // saving borrowed book details
+        // save borrow info
         const borrowData = {
-            bookId : id,
-            bookImg : book.image,
-            bookName : book.name,
+            bookId: id,
+            bookImg: book.image,
+            bookName: book.name,
             userEmail,
-            borrowedDate : new Date(),
+            borrowedDate: new Date(),
             returnDate,
+        };
 
-        } 
+        const result = await db.collection('borrow').insertOne(borrowData);
 
-        const result2 = await borrowCollection.insertOne(borrowData);
-
-        res.send(result1 , result2);
-    })
-
-    
-
-    //  specific categorized book data from db
-
-    app.get('/book-category/:category' , async(req , res)=> {
-        const categoryName = req.params.category;
-        const query = {category : categoryName};
-        const result = await booksCollection.find(query).toArray();
         res.send(result);
-    })
 
-    // specific book data from db
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
-    app.get('/book-detail/:id' , async(req , res)=> {
-        const id = req.params.id;
-        const query = {_id: new ObjectId(id)};
-        const result = await booksCollection.findOne(query);
+
+// Category Books
+app.get('/book-category/:category', async (req, res) => {
+    try {
+        const client = await clientPromise;
+        const result = await client.db('bookArchive')
+            .collection('books')
+            .find({ category: req.params.category })
+            .toArray();
+
         res.send(result);
-    })
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
-    // get borrowed book data
 
-    app.get('/borrowed/:email' , async (req , res)=> {
-        const email = req.params.email;
-        const query = {userEmail: email};
-        const result = await borrowCollection.find(query).toArray();
+// Single Book Details
+app.get('/book-detail/:id', async (req, res) => {
+    try {
+        const client = await clientPromise;
+        const result = await client.db('bookArchive')
+            .collection('books')
+            .findOne({ _id: new ObjectId(req.params.id) });
+
         res.send(result);
-    })
-
-    // get all books
-
-    app.get('/all-books' , async (req , res)=> {
-        const result = await booksCollection.find({}).toArray();
-        console.log(result);
-        res.send(result)
-    })
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 
+// Borrowed Books
+app.get('/borrowed/:email', async (req, res) => {
+    try {
+        const client = await clientPromise;
+        const result = await client.db('bookArchive')
+            .collection('borrow')
+            .find({ userEmail: req.params.email })
+            .toArray();
 
-    // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
-  } finally {
-    // Ensures that the client will close when you finish/error
-    // await client.close();
-  }
-}
-run().catch(console.dir);
+        res.send(result);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
+// All Books
+app.get('/all-books', async (req, res) => {
+    try {
+        const client = await clientPromise;
+        const result = await client.db('bookArchive')
+            .collection('books')
+            .find({})
+            .toArray();
+
+        res.send(result);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
 
 
 
-
-app.get('/', (req , res) => {
-    res.send('Library Server Getting Ready')
-})
-
-app.listen(port , () => {
-    console.log('library server running on port:' , port)
-})
+module.exports = app;
